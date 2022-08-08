@@ -2,13 +2,13 @@ use {clap::Parser, std::io, std::io::prelude::*};
 
 macro_rules! flip_alpha {
     ( $lookup:expr ) => {{
-        let mut a: [u8; 128] = [255; 128];
+        let mut out: [u8; 123] = [123; 123];
         let mut i = 0;
         loop {
             if i < 58 {
-                a[$lookup[i] as usize] = i as u8;
-            } else if i == 128 {
-                break a;
+                out[$lookup[i] as usize] = i as u8;
+            } else if i == 123 {
+                break out;
             }
             i += 1;
         }
@@ -16,7 +16,7 @@ macro_rules! flip_alpha {
 }
 
 const ALPHABET: [u8; 58] = *b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-const ALPHABET_MAP: [u8; 128] = flip_alpha!(ALPHABET);
+const ALPHABET_MAP: [u8; 123] = flip_alpha!(ALPHABET);
 
 fn main() {
     match Args::parse().d {
@@ -26,39 +26,64 @@ fn main() {
 }
 
 fn decode() {
-    let mut input = io::stdin()
+    let mut out: Vec<u8> = vec![];
+    let input = io::stdin()
         .bytes()
         .enumerate()
         .map(|(i, byte)| {
-            let byte = byte.unwrap();
-            match ALPHABET_MAP[byte as usize] as usize {
-                255 => panic!("Unmapped incoming byte {:?} at index {:?}.", byte, i),
-                any => any,
+            match ALPHABET_MAP[*byte.as_ref().unwrap() as usize] {
+                123 => panic!("Unmapped incoming byte {:?} at index {:?}.", byte, i),
+                any => any as i32,
             }
         })
-        .collect::<Vec<usize>>();
+        .collect::<Vec<i32>>();
+    input.clone().iter_mut()
+        .for_each(|b58_index| {
+            out.iter_mut().for_each(|digit| {
+                *b58_index += (*digit as i32) * 58; // move up one sig digit
+                *digit = (*b58_index & 0xff) as u8;
+                *b58_index >>= 8;
+            });
 
-    let out: &mut [u8] = &mut vec![0; input.len()][..];
-
-    input.iter_mut().enumerate().for_each(|(index, b58_index)| {
-        out[..index].iter_mut().for_each(|digit| {
-            *b58_index += (*digit as usize) * 58; // move up one sig digit
-            *digit = (*b58_index & 0xff) as u8;
-            *b58_index >>= 8;
+            if *b58_index > 0 {
+                out.push((*b58_index & 0xff) as u8);
+            }
         });
 
-        out[index] = (*b58_index & 0xff) as u8;
-    });
+    input.iter() // highest sig digits will get filtered out by > 0 check, add back
+        .take_while(|c| **c == 0)
+        .for_each(|_| out.push(0));
 
-    let parsed = out.len() * 6 / 8; // how many encoding blocks did we get
-    let out = &mut out[..parsed];
     out.reverse();
-
     io::stdout().write(&out).unwrap();
 }
 
 fn encode() {
-    panic!("Fuck");
+    let mut out: Vec<u8> = vec![];
+    let input = io::stdin()
+        .bytes()
+        .map(|c| c.unwrap() as i32)
+        .collect::<Vec<i32>>();
+    input.clone().iter_mut()
+        .for_each(|carry| {
+            out.iter_mut().for_each(|byte| {
+                *carry += (*byte as i32) << 8;
+                *byte = (*carry % 58) as u8;
+                *carry /= 58;
+            });
+
+            while *carry > 0 {
+                out.push((*carry % 58) as u8);
+                *carry /= 58;
+            }
+        });
+
+    input.iter() // highest sig digits will get filtered out by > 0 check, add back
+        .take_while(|c| **c == 0)
+        .for_each(|_| out.push(0));
+
+    out = out.iter().map(|c| ALPHABET[*c as usize]).rev().collect();
+    io::stdout().write(&out).unwrap();
 }
 
 ////

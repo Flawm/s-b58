@@ -1,4 +1,4 @@
-use {clap::Parser, std::io, std::io::prelude::*};
+use {std::io, std::io::prelude::*};
 
 macro_rules! flip_alpha {
     ( $lookup:expr ) => {{
@@ -19,8 +19,8 @@ const ALPHABET: [u8; 58] = *b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqr
 const ALPHABET_MAP: [u8; 123] = flip_alpha!(ALPHABET);
 
 fn main() {
-    match Args::parse().d {
-        true => decode(),
+    match &std::env::args().last().unwrap() as &str {
+        "-d" => decode(),
         _ => encode(),
     }
 }
@@ -40,7 +40,7 @@ fn decode() {
     input.clone().iter_mut()
         .for_each(|b58_index| {
             out.iter_mut().for_each(|digit| {
-                *b58_index += (*digit as i32) * 58; // move up one sig digit
+                *b58_index += (*digit as i32) * 58; // move over one sig digit
                 *digit = (*b58_index & 0xff) as u8;
                 *b58_index >>= 8;
             });
@@ -84,14 +84,4 @@ fn encode() {
 
     out = out.iter().map(|c| ALPHABET[*c as usize]).rev().collect();
     io::stdout().write(&out).unwrap();
-}
-
-////
-
-#[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None)]
-struct Args {
-    /// To decode std::in
-    #[clap(short, long, action)]
-    d: bool,
 }
